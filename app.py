@@ -48,23 +48,25 @@ st.sidebar.title("Navigasi")
 menu = st.sidebar.radio("Pilih Halaman:", ["Form Kuesioner", "Panel Admin"])
 
 # ==========================================
-# MANAJEMEN MEMORI AGAR DATA TIDAK HILANG
+# MANAJEMEN MEMORI CERDAS
 # ==========================================
 if "step" not in st.session_state:
     st.session_state.step = 1
-    
+
 aspek_list = [(27, 'x1', 'Kemudahan mencapai lokasi'), (28, 'x2', 'Kejelasan Papan Nama'), (29, 'x3', 'Kenyamanan ruang'), (30, 'x4', 'Sarana Parkir'), (32, 'x5', 'Keramahan Petugas'), (33, 'x6', 'Layanan telepon/fax'), (35, 'x7', 'Kepercayaan hasil uji'), (36, 'x8', 'Peralatan lengkap & modern'), (37, 'x9', 'Akreditasi KAN'), (38, 'x10', 'Kemampuan petugas'), (40, 'x11', 'Parameter standar Permenkes'), (41, 'x12', 'Tampilan LHP'), (42, 'x13', 'Prosedur Pengujian'), (43, 'x14', 'Ketepatan Waktu')]
 
-# Menyimpan nilai default ke memori
+# Menyimpan nilai default yang lebih "netral" untuk pengguna baru (seolah belum diisi)
 for baris, _, _ in aspek_list:
-    if f"h_{baris}" not in st.session_state: st.session_state[f"h_{baris}"] = 4
-    if f"l_{baris}" not in st.session_state: st.session_state[f"l_{baris}"] = 3
+    if f"h_{baris}" not in st.session_state: st.session_state[f"h_{baris}"] = 1 # Set Harapan default ke 1
+    if f"l_{baris}" not in st.session_state: st.session_state[f"l_{baris}"] = 1 # Set Pelayanan default ke 1
 
 if "q1" not in st.session_state: st.session_state.q1 = "Usaha"
 if "q2" not in st.session_state: st.session_state.q2 = "Laboratorium PDAM TKR"
 if "q2_alasan" not in st.session_state: st.session_state.q2_alasan = ""
 if "q3" not in st.session_state: st.session_state.q3 = "Ya"
 if "q3_nama" not in st.session_state: st.session_state.q3_nama = ""
+if "q3_alamat" not in st.session_state: st.session_state.q3_alamat = "" # TAMBAHAN ALAMAT
+if "q3_telp" not in st.session_state: st.session_state.q3_telp = ""       # TAMBAHAN NO TELP
 if "q4" not in st.session_state: st.session_state.q4 = "Cukup"
 param_kurang = {'Amoniak': 70, 'Aluminium': 71, 'Seng': 72, 'Tembaga': 73, 'Detergent': 74, 'Kadmium': 75, 'Chromium Valensi 6': 76, 'Sianida': 77, 'Flourida': 78, 'Phospat': 79}
 for param, baris in param_kurang.items():
@@ -77,6 +79,7 @@ def go_back(): st.session_state.step = 1
 def reset_kuesioner():
     for key in list(st.session_state.keys()):
         del st.session_state[key]
+    st.session_state.step = 1 # Pastikan kembali ke step 1
 
 # ==========================================
 # HALAMAN 1: FORM KUESIONER 
@@ -88,7 +91,7 @@ if menu == "Form Kuesioner":
     # --- TAHAP 1: BAGIAN A ---
     if st.session_state.step == 1:
         st.write("### Bagian A: Penilaian Kinerja Laboratorium")
-        st.info("Berikan nilai 1 (Tidak Baik/Penting) hingga 4 (Sangat Baik/Penting).")
+        st.info("Geser indikator berikut untuk memberikan nilai dari 1 (Tidak Baik/Penting) hingga 4 (Sangat Baik/Penting).")
         
         for idx, (baris, kode, teks) in enumerate(aspek_list):
             st.write(f"**{kode}. {teks}**")
@@ -97,7 +100,6 @@ if menu == "Form Kuesioner":
             with col2: st.slider("Pelayanan Dirasakan", 1, 4, key=f"l_{baris}")
             st.write("---")
         
-        # Tombol Next yang memastikan pelanggan pindah ke halaman B
         st.button("Berikutnya ➡️", type="primary", on_click=go_next)
 
     # --- TAHAP 2: BAGIAN B ---
@@ -106,8 +108,16 @@ if menu == "Form Kuesioner":
         st.radio("1. Kepentingan pengujian:", ["Usaha", "Non Usaha"], key="q1")
         st.radio("2. Pilihan laboratorium:", ["Laboratorium PDAM TKR", "Laboratorium Lain"], key="q2")
         st.text_input("Alasan memilih:", key="q2_alasan")
-        st.radio("3. Pengujian rutin?", ["Ya", "Tidak"], key="q3")
-        st.text_input("Nama Instansi / Perusahaan:", key="q3_nama")
+        
+        st.radio("3. Apakah bermaksud melakukan pengujian rutin?", ["Ya", "Tidak"], key="q3")
+        st.write("*Jika Ya, sebutkan:*")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.text_input("Nama Instansi / Perusahaan:", key="q3_nama")
+            st.text_input("No Telepon / HP:", key="q3_telp") # TERAKOMODASI
+        with c2:
+            st.text_area("Alamat Lengkap:", key="q3_alamat", height=105) # TERAKOMODASI
+            
         st.radio("4. Parameter memenuhi kebutuhan?", ["Cukup", "Kurang"], key="q4")
         
         st.write("*Jika Kurang, parameter apa yang perlu ditambahkan?*")
@@ -124,21 +134,19 @@ if menu == "Form Kuesioner":
         
         st.write("---")
         
-        # Penempatan tombol Kembali dan Kirim
         c_back, c_submit = st.columns([1, 3])
         with c_back:
             st.button("⬅️ Kembali", on_click=go_back)
         with c_submit:
             kirim = st.button("Kirim Kuesioner ✅", type="primary")
 
-        # LOGIKA PENYIMPANAN
         if kirim:
             try:
                 wb = openpyxl.load_workbook(TEMPLATE_F13)
                 sheet = wb[NAMA_SHEET_F13]
                 data_evaluasi_baru = {}
                 
-                # Membaca kembali data dari memori Bagian A
+                # Memasukkan Nilai Bagian A (Kinerja)
                 for idx, (baris, _, _) in enumerate(aspek_list):
                     harapan = st.session_state[f"h_{baris}"]
                     pelayanan = st.session_state[f"l_{baris}"]
@@ -149,7 +157,7 @@ if menu == "Form Kuesioner":
                     
                 nama_instansi = st.session_state.q3_nama if st.session_state.q3_nama else "Anonim"
                 
-                # Memasukkan data Bagian B ke file Excel
+                # Memasukkan Profil Pelanggan (Bagian B)
                 if st.session_state.q1 == "Usaha": sheet.cell(row=50, column=3).value = "X"
                 else: sheet.cell(row=51, column=3).value = "X"
                 
@@ -160,6 +168,8 @@ if menu == "Form Kuesioner":
                 if st.session_state.q3 == "Ya": 
                     sheet.cell(row=59, column=3).value = "X"
                     if st.session_state.q3_nama: sheet.cell(row=62, column=5).value = st.session_state.q3_nama
+                    if st.session_state.q3_alamat: sheet.cell(row=63, column=5).value = st.session_state.q3_alamat # DISIMPAN KE EXCEL
+                    if st.session_state.q3_telp: sheet.cell(row=64, column=5).value = st.session_state.q3_telp # DISIMPAN KE EXCEL
                 else: sheet.cell(row=60, column=3).value = "X"
                     
                 if st.session_state.q4 == "Cukup": sheet.cell(row=67, column=3).value = "X"
