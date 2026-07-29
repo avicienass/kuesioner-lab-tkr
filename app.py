@@ -5,12 +5,14 @@ import pandas as pd
 import os
 import datetime
 import zipfile
+import base64
 
 # --- Konfigurasi ---
 TEMPLATE_FILE = "F 13 - Kuesioner Pelanggan.xlsx"
 NAMA_SHEET = "rev 3"
 LOG_FILE = "log_responden.csv"
 FOLDER_HASIL = "hasil_kuesioner"
+LOGO_FILE = "logo tkr.jpg" # Menghubungkan file logo Anda
 
 # Membuat folder dan file log jika belum ada di server
 if not os.path.exists(FOLDER_HASIL):
@@ -20,8 +22,45 @@ if not os.path.exists(LOG_FILE):
 
 st.set_page_config(page_title="Kuesioner Lab TKR", layout="centered")
 
+# --- FUNGSI MEMBUAT WATERMARK ---
+def buat_watermark():
+    if os.path.exists(LOGO_FILE):
+        with open(LOGO_FILE, "rb") as f:
+            encoded_string = base64.b64encode(f.read()).decode()
+        
+        st.markdown(
+            f"""
+            <style>
+            .stApp::before {{
+                content: "";
+                background-image: url(data:image/jpeg;base64,{encoded_string});
+                background-size: 350px;
+                background-position: center;
+                background-repeat: no-repeat;
+                background-attachment: fixed;
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 100vw;
+                height: 100vh;
+                opacity: 0.07; /* Tingkat transparansi watermark (7%) */
+                z-index: -1;
+                pointer-events: none; /* Agar tidak menghalangi klik */
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+
+# Jalankan fungsi watermark
+buat_watermark()
+
 # --- MENU SAMPING (SIDEBAR) ---
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/3127/3127995.png", width=100) # Ikon lab
+# Menampilkan logo PERUMDAM yang solid (tidak transparan) di menu samping
+if os.path.exists(LOGO_FILE):
+    st.sidebar.image(LOGO_FILE, use_container_width=True)
+
 st.sidebar.title("Navigasi")
 menu = st.sidebar.radio("Pilih Halaman:", ["Form Kuesioner", "Panel Admin"])
 
@@ -31,7 +70,6 @@ menu = st.sidebar.radio("Pilih Halaman:", ["Form Kuesioner", "Panel Admin"])
 if menu == "Form Kuesioner":
     st.title("Kuesioner Kepuasan Pelanggan")
     st.subheader("Laboratorium Perumdam Tirta Kerta Raharja")
-
     st.write("Terima kasih atas kesediaan Anda menjawab pertanyaan berikut. Berikan nilai **1 (Tidak Baik/Tidak Penting)** hingga **4 (Sangat Baik/Sangat Penting)**.")
 
     tab1, tab2 = st.tabs(["Bagian A: Penilaian Kinerja", "Bagian B: Kebutuhan & Saran"])
@@ -39,7 +77,6 @@ if menu == "Form Kuesioner":
     with st.form("kuesioner_form"):
         with tab1:
             st.write("### Penilaian Kinerja Laboratorium")
-            
             aspek_list = [
                 (27, 'x1. Kemudahan mencapai lokasi laboratorium'),
                 (28, 'x2. Kejelasan Papan Nama Gedung'),
@@ -56,7 +93,6 @@ if menu == "Form Kuesioner":
                 (42, 'x13. Kemudahan Pelayanan dan Prosedur Pengujian'),
                 (43, 'x14. Ketepatan Waktu Penyelesaian Pengujian')
             ]
-            
             jawaban_a = {}
             for baris, teks in aspek_list:
                 st.write(f"**{teks}**")
@@ -83,7 +119,6 @@ if menu == "Form Kuesioner":
                 
             q4 = st.radio("4. Apakah parameter pengujian kami memenuhi kebutuhan Anda?", ["Cukup", "Kurang"])
             st.write("*Jika Kurang, parameter apa yang perlu ditambahkan?*")
-            
             param_kurang = {'Amoniak': 70, 'Aluminium': 71, 'Seng': 72, 'Tembaga': 73, 'Detergent': 74, 'Kadmium': 75, 'Chromium Valensi 6': 76, 'Sianida': 77, 'Flourida': 78, 'Phospat': 79}
             pilihan_param = []
             c3, c4 = st.columns(2)
@@ -123,8 +158,7 @@ if menu == "Form Kuesioner":
                 if q3_nama: sheet.cell(row=62, column=5).value = q3_nama
                 if q3_alamat: sheet.cell(row=63, column=5).value = q3_alamat
                 if q3_hp: sheet.cell(row=64, column=5).value = q3_hp
-            else: 
-                sheet.cell(row=60, column=3).value = "X"
+            else: sheet.cell(row=60, column=3).value = "X"
                 
             if q4 == "Cukup": sheet.cell(row=67, column=3).value = "X"
             else: 
@@ -136,7 +170,6 @@ if menu == "Form Kuesioner":
 
             if q5_saran: sheet.cell(row=82, column=3).value = q5_saran
 
-            # 1. Simpan file Excel ke folder tersembunyi di server
             nama_instansi = q3_nama if q3_nama else "Anonim"
             waktu_sekarang = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             nama_file_unik = f"F13_{nama_instansi}_{datetime.datetime.now().strftime('%H%M%S')}.xlsx"
@@ -144,7 +177,6 @@ if menu == "Form Kuesioner":
             
             wb.save(path_simpan)
 
-            # 2. Catat ke dalam file Log CSV
             df_log = pd.read_csv(LOG_FILE)
             data_baru = pd.DataFrame([{"Waktu Isi": waktu_sekarang, "Nama / Instansi": nama_instansi, "Tujuan Uji": q1}])
             df_log = pd.concat([df_log, data_baru], ignore_index=True)
@@ -162,13 +194,11 @@ elif menu == "Panel Admin":
     st.title("🛡️ Panel Admin")
     st.info("Halaman ini khusus untuk pemantauan kuesioner.")
     
-    # Password Sederhana
     pwd = st.text_input("Masukkan Password:", type="password")
     
-    if pwd == "admin123": # <--- ANDA BISA MENGGANTI PASSWORD DI SINI
+    if pwd == "admin123":
         st.success("Login Berhasil!")
         
-        # Tampilkan Tabel Log Responden
         df_log = pd.read_csv(LOG_FILE)
         st.write(f"### Total Responden Saat Ini: {len(df_log)} Orang")
         st.dataframe(df_log, use_container_width=True)
@@ -176,7 +206,6 @@ elif menu == "Panel Admin":
         st.write("---")
         st.write("### 📥 Download Data")
         
-        # Fitur download ZIP (Semua file Excel sekaligus)
         if len(os.listdir(FOLDER_HASIL)) > 0:
             zip_buffer = BytesIO()
             with zipfile.ZipFile(zip_buffer, "w") as zip_file:
@@ -192,7 +221,6 @@ elif menu == "Panel Admin":
                 help="Download semua file Excel F13 yang sudah diisi pelanggan dalam satu folder ZIP."
             )
             
-            # Fitur download Log (Tabel CSV)
             with open(LOG_FILE, "rb") as f:
                 st.download_button("📄 Download Tabel Log (.CSV)", f, file_name="Log_Responden.csv")
         else:
