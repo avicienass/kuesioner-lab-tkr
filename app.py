@@ -6,19 +6,21 @@ import os
 import datetime
 import zipfile
 import base64
+import random
 
 # --- Konfigurasi ---
 TEMPLATE_FILE = "F 13 - Kuesioner Pelanggan.xlsx"
 NAMA_SHEET = "rev 3"
-LOG_FILE = "log_responden.csv"
+LOG_FILE = "log_kuesioner_baru.csv" # Nama file diubah agar membuat log baru tanpa kolom waktu
 FOLDER_HASIL = "hasil_kuesioner"
-LOGO_FILE = "logo tkr.jpg" # Menghubungkan file logo Anda
+LOGO_FILE = "logo tkr.jpg" 
 
 # Membuat folder dan file log jika belum ada di server
 if not os.path.exists(FOLDER_HASIL):
     os.makedirs(FOLDER_HASIL)
 if not os.path.exists(LOG_FILE):
-    pd.DataFrame(columns=["Waktu Isi", "Nama / Instansi", "Tujuan Uji"]).to_csv(LOG_FILE, index=False)
+    # Kolom "Waktu Isi" dihapus
+    pd.DataFrame(columns=["Nama / Instansi", "Tujuan Uji"]).to_csv(LOG_FILE, index=False)
 
 st.set_page_config(page_title="Kuesioner Lab TKR", layout="centered")
 
@@ -44,9 +46,9 @@ def buat_watermark():
                 transform: translate(-50%, -50%);
                 width: 100vw;
                 height: 100vh;
-                opacity: 0.07; /* Tingkat transparansi watermark (7%) */
+                opacity: 0.07; 
                 z-index: -1;
-                pointer-events: none; /* Agar tidak menghalangi klik */
+                pointer-events: none; 
             }}
             </style>
             """,
@@ -57,7 +59,6 @@ def buat_watermark():
 buat_watermark()
 
 # --- MENU SAMPING (SIDEBAR) ---
-# Menampilkan logo PERUMDAM yang solid (tidak transparan) di menu samping
 if os.path.exists(LOGO_FILE):
     st.sidebar.image(LOGO_FILE, use_container_width=True)
 
@@ -171,14 +172,16 @@ if menu == "Form Kuesioner":
             if q5_saran: sheet.cell(row=82, column=3).value = q5_saran
 
             nama_instansi = q3_nama if q3_nama else "Anonim"
-            waktu_sekarang = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            nama_file_unik = f"F13_{nama_instansi}_{datetime.datetime.now().strftime('%H%M%S')}.xlsx"
+            # Menggunakan 4 angka acak sebagai ganti jam/menit/detik
+            kode_acak = random.randint(1000, 9999) 
+            nama_file_unik = f"F13_{nama_instansi}_{kode_acak}.xlsx"
             path_simpan = os.path.join(FOLDER_HASIL, nama_file_unik)
             
             wb.save(path_simpan)
 
             df_log = pd.read_csv(LOG_FILE)
-            data_baru = pd.DataFrame([{"Waktu Isi": waktu_sekarang, "Nama / Instansi": nama_instansi, "Tujuan Uji": q1}])
+            # Menyimpan ke log tanpa atribut waktu
+            data_baru = pd.DataFrame([{"Nama / Instansi": nama_instansi, "Tujuan Uji": q1}])
             df_log = pd.concat([df_log, data_baru], ignore_index=True)
             df_log.to_csv(LOG_FILE, index=False)
 
@@ -216,13 +219,14 @@ elif menu == "Panel Admin":
             st.download_button(
                 label="📦 Download Semua File Kuesioner (.ZIP)",
                 data=zip_buffer.getvalue(),
-                file_name=f"Rekap_Kuesioner_{datetime.datetime.now().strftime('%Y%m%d')}.zip",
+                # Menghilangkan tanggal juga dari nama file zip hasil download 
+                file_name="Rekap_Data_Kuesioner.zip",
                 mime="application/zip",
                 help="Download semua file Excel F13 yang sudah diisi pelanggan dalam satu folder ZIP."
             )
             
             with open(LOG_FILE, "rb") as f:
-                st.download_button("📄 Download Tabel Log (.CSV)", f, file_name="Log_Responden.csv")
+                st.download_button("📄 Download Tabel Log (.CSV)", f, file_name="Data_Responden.csv")
         else:
             st.warning("Belum ada kuesioner yang diisi. Folder masih kosong.")
             
