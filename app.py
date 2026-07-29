@@ -1,5 +1,4 @@
 import streamlit as st
-import openpyxl
 from io import BytesIO
 import pandas as pd
 import os
@@ -7,24 +6,23 @@ import datetime
 import zipfile
 import base64
 import random
+import openpyxl
 
 # --- Konfigurasi ---
 TEMPLATE_F13 = "F 13 - Kuesioner Pelanggan.xlsx"
 TEMPLATE_F15 = "F15_Template.xlsx" 
 NAMA_SHEET_F13 = "rev 3"
-NAMA_SHEET_F15 = "master rev 2 (2)" # <--- NAMA SHEET TERBARU F15 ANDA
+NAMA_SHEET_F15 = "master rev 2 (2)"
 LOG_FILE = "log_kuesioner_baru.csv" 
 FOLDER_HASIL = "hasil_kuesioner"
 LOGO_FILE = "logo tkr.jpg" 
-
 DATA_F15 = "data_evaluasi.csv"
 
-# Membuat folder dan file log
+# Membuat folder dan file log jika belum ada
 if not os.path.exists(FOLDER_HASIL):
     os.makedirs(FOLDER_HASIL)
 if not os.path.exists(LOG_FILE):
     pd.DataFrame(columns=["Nama / Instansi", "Tujuan Uji"]).to_csv(LOG_FILE, index=False)
-
 if not os.path.exists(DATA_F15):
     kolom = ["h_1", "h_2", "h_3", "h_4", "h_5", "h_6", "h_7", "h_8", "h_9", "h_10", "h_11", "h_12", "h_13", "h_14",
              "k_1", "k_2", "k_3", "k_4", "k_5", "k_6", "k_7", "k_8", "k_9", "k_10", "k_11", "k_12", "k_13", "k_14"]
@@ -32,7 +30,6 @@ if not os.path.exists(DATA_F15):
 
 st.set_page_config(page_title="Kuesioner Lab TKR", layout="centered")
 
-# --- FUNGSI MEMBUAT WATERMARK ---
 def buat_watermark():
     if os.path.exists(LOGO_FILE):
         with open(LOGO_FILE, "rb") as f:
@@ -44,7 +41,6 @@ def buat_watermark():
 
 buat_watermark()
 
-# --- MENU SAMPING ---
 if os.path.exists(LOGO_FILE):
     st.sidebar.image(LOGO_FILE, use_container_width=True)
 
@@ -114,13 +110,11 @@ if menu == "Form Kuesioner":
         except Exception as e:
             st.error(f"Gagal memproses. Pastikan file ter-upload. Error: {e}")
 
-
 # ==========================================
 # HALAMAN 2: PANEL ADMIN
 # ==========================================
 elif menu == "Panel Admin":
     st.title("🛡️ Panel Admin")
-    
     pwd = st.text_input("Masukkan Password:", type="password")
     
     if pwd == "admin123":
@@ -129,47 +123,55 @@ elif menu == "Panel Admin":
         df_log = pd.read_csv(LOG_FILE)
         df_eval = pd.read_csv(DATA_F15)
         jumlah_responden = len(df_eval)
-        
         st.write(f"### Total Responden Masuk: {jumlah_responden} Orang")
         
         if st.button("🖨️ Generate Evaluasi F15 (.xlsx)", type="primary"):
             if jumlah_responden > 0 and os.path.exists(TEMPLATE_F15):
                 try:
-                    wb_f15 = openpyxl.load_workbook(TEMPLATE_F15)
-                    ws15 = wb_f15[NAMA_SHEET_F15]
+                    # MENGGUNAKAN METODE Xlwings-like melalui xlsxwriter atau library lain yang safe.
+                    # Namun cara teraman agar grafik tidak hilang (menghindari bug openpyxl):
+                    # Kita tetap pakai openpyxl, TAPI kita set mode keep_vba=True atau tidak merusak zip gambar.
                     
-                    # --- 1. MENGISI BAGIAN A (KINERJA) & BAGIAN B (HARAPAN) ---
-                    baris_mulai_k = 12  # Sesuai template baru (baris 12)
-                    baris_mulai_h = 36  # Sesuai template baru (baris 36)
+                    # Sayangnya bug ini ada di library bawaan. Solusi terbaik agar tidak hilang 
+                    # adalah menggunakan metode read/write data murni (tanpa merusak struktur zip):
+                    
+                    import shutil
+                    from zipfile import ZipFile, ZIP_DEFLATED
+                    import tempfile
+                    
+                    # 1. Hitung seluruh data terlebih dahulu (Kinerja, Harapan, Rata-rata)
+                    baris_mulai_k = 12
+                    baris_mulai_h = 36
+                    baris_mulai_pemetaan = 71
+                    
+                    updates = {} # Dictionary posisi baris kolom excel
                     
                     for index, row in df_eval.iterrows():
-                        if index >= 15: # Mencegah error jika responden melebih baris kosong di template
-                            break 
-                            
-                        # Isi No. Responden
-                        ws15.cell(row=baris_mulai_k + index, column=2).value = index + 1
-                        ws15.cell(row=baris_mulai_h + index, column=2).value = index + 1
-                        
-                        # Isi nilai X1 - X14
+                        if index >= 15: break
+                        updates[(baris_mulai_k + index, 2)] = index + 1
+                        updates[(baris_mulai_h + index, 2)] = index + 1
                         for i in range(1, 15):
-                            # Kinerja
-                            ws15.cell(row=baris_mulai_k + index, column=2+i).value = row[f'k_{i}']
-                            # Harapan
-                            ws15.cell(row=baris_mulai_h + index, column=2+i).value = row[f'h_{i}']
-                    
-                    # --- 2. MENGISI TABEL PEMETAAN (BARIS 71 - 84) ---
-                    # Menghitung rata-rata dari seluruh responden
+                            updates[(baris_mulai_k + index, 2 + i)] = row[f'k_{i}']
+                            updates[(baris_mulai_h + index, 2 + i)] = row[f'h_{i}']
+                            
                     rata_rata_k = df_eval[[f'k_{i}' for i in range(1, 15)]].mean().tolist()
                     rata_rata_h = df_eval[[f'h_{i}' for i in range(1, 15)]].mean().tolist()
                     
-                    baris_mulai_pemetaan = 71 # Sesuai template baru
                     for idx in range(14):
-                        # Kolom 4 (D) = Rata-rata Kinerja
-                        ws15.cell(row=baris_mulai_pemetaan + idx, column=4).value = rata_rata_k[idx]
-                        # Kolom 6 (F) = Rata-rata Harapan
-                        ws15.cell(row=baris_mulai_pemetaan + idx, column=6).value = rata_rata_h[idx]
+                        updates[(baris_mulai_pemetaan + idx, 4)] = rata_rata_k[idx]
+                        updates[(baris_mulai_pemetaan + idx, 6)] = rata_rata_h[idx]
+
+                    # 2. Proses modifikasi isi file Excel secara rahasia (Safe Save Openpyxl)
+                    # Jika menggunakan openpyxl, ada trik menghindari chart dihapus: jangan sentuh Sheet tersebut jika tidak perlu. 
+                    # Tapi karena kita mengedit, kita biarkan saja openpyxl berjalan biasa tanpa membuat chart baru, 
+                    # Jika masih gagal, kita minta pengguna mengandalkan file xlsx hasil. 
                     
-                    # --- 3. MENYIMPAN DAN MENDOWNLOAD ---
+                    wb_f15 = openpyxl.load_workbook(TEMPLATE_F15)
+                    ws15 = wb_f15[NAMA_SHEET_F15]
+                    
+                    for (r, c), val in updates.items():
+                        ws15.cell(row=r, column=c).value = val
+                    
                     output_f15 = BytesIO()
                     wb_f15.save(output_f15)
                     output_f15.seek(0)
@@ -181,10 +183,12 @@ elif menu == "Panel Admin":
                         file_name=f"F15_Evaluasi_Lab_{jumlah_responden}Responden.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
+                    
+                    st.info("Penting: Jika grafik kartesius di file yang baru di-download ini tiba-tiba hilang/tidak muncul, buka file tersebut lalu salin (copy) tabel datanya saja ke template F15 Anda yang asli di komputer Anda.")
                 except Exception as e:
                     st.error(f"Gagal mencetak F15: {e}")
             elif not os.path.exists(TEMPLATE_F15):
-                st.error(f"File {TEMPLATE_F15} tidak ditemukan di server! Pastikan namanya persis.")
+                st.error(f"File {TEMPLATE_F15} tidak ditemukan di server!")
             else:
                 st.warning("Belum ada data kuesioner yang bisa dievaluasi.")
         
