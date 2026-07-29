@@ -1,0 +1,15 @@
+[theme]
+# Warna utama (Tombol, garis, slider) - Biru Khas PERUMDAM
+primaryColor = "#005a9c"
+
+# Warna latar belakang utama - Putih Bersih
+backgroundColor = "#ffffff"
+
+# Warna latar belakang sekunder (Sidebar & Tab) - Biru Air Sangat Muda
+secondaryBackgroundColor = "#eaf4fc"
+
+# Warna teks utama - Biru Gelap Kehitaman agar elegan dan mudah dibaca
+textColor = "#00213b"
+
+# Pilihan font
+font = "sans serif"
