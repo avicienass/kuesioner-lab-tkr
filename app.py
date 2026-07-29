@@ -1,4 +1,5 @@
 import streamlit as st
+import openpyxl
 from io import BytesIO
 import pandas as pd
 import os
@@ -6,7 +7,6 @@ import datetime
 import zipfile
 import base64
 import random
-import openpyxl
 
 # --- Konfigurasi ---
 TEMPLATE_F13 = "F 13 - Kuesioner Pelanggan.xlsx"
@@ -18,7 +18,7 @@ FOLDER_HASIL = "hasil_kuesioner"
 LOGO_FILE = "logo tkr.jpg" 
 DATA_F15 = "data_evaluasi.csv"
 
-# Membuat folder dan file log jika belum ada
+# Membuat folder dan file log
 if not os.path.exists(FOLDER_HASIL):
     os.makedirs(FOLDER_HASIL)
 if not os.path.exists(LOG_FILE):
@@ -48,67 +48,147 @@ st.sidebar.title("Navigasi")
 menu = st.sidebar.radio("Pilih Halaman:", ["Form Kuesioner", "Panel Admin"])
 
 # ==========================================
+# MANAJEMEN MEMORI AGAR DATA TIDAK HILANG
+# ==========================================
+if "step" not in st.session_state:
+    st.session_state.step = 1
+    
+aspek_list = [(27, 'x1', 'Kemudahan mencapai lokasi'), (28, 'x2', 'Kejelasan Papan Nama'), (29, 'x3', 'Kenyamanan ruang'), (30, 'x4', 'Sarana Parkir'), (32, 'x5', 'Keramahan Petugas'), (33, 'x6', 'Layanan telepon/fax'), (35, 'x7', 'Kepercayaan hasil uji'), (36, 'x8', 'Peralatan lengkap & modern'), (37, 'x9', 'Akreditasi KAN'), (38, 'x10', 'Kemampuan petugas'), (40, 'x11', 'Parameter standar Permenkes'), (41, 'x12', 'Tampilan LHP'), (42, 'x13', 'Prosedur Pengujian'), (43, 'x14', 'Ketepatan Waktu')]
+
+# Menyimpan nilai default ke memori
+for baris, _, _ in aspek_list:
+    if f"h_{baris}" not in st.session_state: st.session_state[f"h_{baris}"] = 4
+    if f"l_{baris}" not in st.session_state: st.session_state[f"l_{baris}"] = 3
+
+if "q1" not in st.session_state: st.session_state.q1 = "Usaha"
+if "q2" not in st.session_state: st.session_state.q2 = "Laboratorium PDAM TKR"
+if "q2_alasan" not in st.session_state: st.session_state.q2_alasan = ""
+if "q3" not in st.session_state: st.session_state.q3 = "Ya"
+if "q3_nama" not in st.session_state: st.session_state.q3_nama = ""
+if "q4" not in st.session_state: st.session_state.q4 = "Cukup"
+param_kurang = {'Amoniak': 70, 'Aluminium': 71, 'Seng': 72, 'Tembaga': 73, 'Detergent': 74, 'Kadmium': 75, 'Chromium Valensi 6': 76, 'Sianida': 77, 'Flourida': 78, 'Phospat': 79}
+for param, baris in param_kurang.items():
+    if f"param_{baris}" not in st.session_state: st.session_state[f"param_{baris}"] = False
+if "q4_lainnya" not in st.session_state: st.session_state.q4_lainnya = ""
+if "q5_saran" not in st.session_state: st.session_state.q5_saran = ""
+
+def go_next(): st.session_state.step = 2
+def go_back(): st.session_state.step = 1
+def reset_kuesioner():
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+
+# ==========================================
 # HALAMAN 1: FORM KUESIONER 
 # ==========================================
 if menu == "Form Kuesioner":
     st.title("Kuesioner Kepuasan Pelanggan")
     st.subheader("Laboratorium Perumdam Tirta Kerta Raharja")
 
-    tab1, tab2 = st.tabs(["Bagian A: Penilaian Kinerja", "Bagian B: Kebutuhan & Saran"])
+    # --- TAHAP 1: BAGIAN A ---
+    if st.session_state.step == 1:
+        st.write("### Bagian A: Penilaian Kinerja Laboratorium")
+        st.info("Berikan nilai 1 (Tidak Baik/Penting) hingga 4 (Sangat Baik/Penting).")
+        
+        for idx, (baris, kode, teks) in enumerate(aspek_list):
+            st.write(f"**{kode}. {teks}**")
+            col1, col2 = st.columns(2)
+            with col1: st.slider("Harapan Anda", 1, 4, key=f"h_{baris}")
+            with col2: st.slider("Pelayanan Dirasakan", 1, 4, key=f"l_{baris}")
+            st.write("---")
+        
+        # Tombol Next yang memastikan pelanggan pindah ke halaman B
+        st.button("Berikutnya ➡️", type="primary", on_click=go_next)
 
-    with st.form("kuesioner_form"):
-        with tab1:
-            st.write("### Penilaian Kinerja Laboratorium")
-            aspek_list = [(27, 'x1', 'Kemudahan mencapai lokasi'), (28, 'x2', 'Kejelasan Papan Nama'), (29, 'x3', 'Kenyamanan ruang'), (30, 'x4', 'Sarana Parkir'), (32, 'x5', 'Keramahan Petugas'), (33, 'x6', 'Layanan telepon/fax'), (35, 'x7', 'Kepercayaan hasil uji'), (36, 'x8', 'Peralatan lengkap & modern'), (37, 'x9', 'Akreditasi KAN'), (38, 'x10', 'Kemampuan petugas'), (40, 'x11', 'Parameter standar Permenkes'), (41, 'x12', 'Tampilan LHP'), (42, 'x13', 'Prosedur Pengujian'), (43, 'x14', 'Ketepatan Waktu')]
-            
-            jawaban_a = {}
-            for idx, (baris, kode, teks) in enumerate(aspek_list):
-                st.write(f"**{kode}. {teks}**")
-                col1, col2 = st.columns(2)
-                with col1: harap = st.slider("Harapan Anda", 1, 4, 4, key=f"h_{baris}")
-                with col2: layan = st.slider("Pelayanan Dirasakan", 1, 4, 3, key=f"l_{baris}")
-                jawaban_a[baris] = {"harapan": harap, "pelayanan": layan, "id": idx+1}
-                st.write("---")
-
-        with tab2:
-            st.write("### Profil & Kebutuhan Pelanggan")
-            q1 = st.radio("1. Kepentingan pengujian:", ["Usaha", "Non Usaha"])
-            q2 = st.radio("2. Pilihan laboratorium:", ["Laboratorium PDAM TKR", "Laboratorium Lain"])
-            q2_alasan = st.text_input("Alasan memilih:")
-            q3 = st.radio("3. Pengujian rutin?", ["Ya", "Tidak"])
-            q3_nama = st.text_input("Nama Instansi / Perusahaan:")
-            q4 = st.radio("4. Parameter memenuhi kebutuhan?", ["Cukup", "Kurang"])
-            q5_saran = st.text_area("5. Saran Peningkatan:")
-            
-        submit_button = st.form_submit_button("Kirim Kuesioner")
-
-    if submit_button:
-        try:
-            wb = openpyxl.load_workbook(TEMPLATE_F13)
-            sheet = wb[NAMA_SHEET_F13]
-            data_evaluasi_baru = {}
-            
-            for baris, skor in jawaban_a.items():
-                sheet.cell(row=baris, column=9).value = skor["harapan"]
-                sheet.cell(row=baris, column=11).value = skor["pelayanan"]
-                data_evaluasi_baru[f'h_{skor["id"]}'] = skor["harapan"]
-                data_evaluasi_baru[f'k_{skor["id"]}'] = skor["pelayanan"]
+    # --- TAHAP 2: BAGIAN B ---
+    elif st.session_state.step == 2:
+        st.write("### Bagian B: Profil & Kebutuhan Pelanggan")
+        st.radio("1. Kepentingan pengujian:", ["Usaha", "Non Usaha"], key="q1")
+        st.radio("2. Pilihan laboratorium:", ["Laboratorium PDAM TKR", "Laboratorium Lain"], key="q2")
+        st.text_input("Alasan memilih:", key="q2_alasan")
+        st.radio("3. Pengujian rutin?", ["Ya", "Tidak"], key="q3")
+        st.text_input("Nama Instansi / Perusahaan:", key="q3_nama")
+        st.radio("4. Parameter memenuhi kebutuhan?", ["Cukup", "Kurang"], key="q4")
+        
+        st.write("*Jika Kurang, parameter apa yang perlu ditambahkan?*")
+        c3, c4 = st.columns(2)
+        for i, (param, baris) in enumerate(param_kurang.items()):
+            if i % 2 == 0:
+                with c3: st.checkbox(param, key=f"param_{baris}")
+            else:
+                with c4: st.checkbox(param, key=f"param_{baris}")
                 
-            nama_instansi = q3_nama if q3_nama else "Anonim"
-            path_simpan = os.path.join(FOLDER_HASIL, f"F13_{nama_instansi}_{random.randint(1000, 9999)}.xlsx")
-            wb.save(path_simpan)
+        st.text_input("Parameter Lain-lain:", key="q4_lainnya")
+        st.write("---")
+        st.text_area("5. Saran Peningkatan:", key="q5_saran")
+        
+        st.write("---")
+        
+        # Penempatan tombol Kembali dan Kirim
+        c_back, c_submit = st.columns([1, 3])
+        with c_back:
+            st.button("⬅️ Kembali", on_click=go_back)
+        with c_submit:
+            kirim = st.button("Kirim Kuesioner ✅", type="primary")
 
-            df_log = pd.read_csv(LOG_FILE)
-            df_log = pd.concat([df_log, pd.DataFrame([{"Nama / Instansi": nama_instansi, "Tujuan Uji": q1}])], ignore_index=True)
-            df_log.to_csv(LOG_FILE, index=False)
+        # LOGIKA PENYIMPANAN
+        if kirim:
+            try:
+                wb = openpyxl.load_workbook(TEMPLATE_F13)
+                sheet = wb[NAMA_SHEET_F13]
+                data_evaluasi_baru = {}
+                
+                # Membaca kembali data dari memori Bagian A
+                for idx, (baris, _, _) in enumerate(aspek_list):
+                    harapan = st.session_state[f"h_{baris}"]
+                    pelayanan = st.session_state[f"l_{baris}"]
+                    sheet.cell(row=baris, column=9).value = harapan
+                    sheet.cell(row=baris, column=11).value = pelayanan
+                    data_evaluasi_baru[f'h_{idx+1}'] = harapan
+                    data_evaluasi_baru[f'k_{idx+1}'] = pelayanan
+                    
+                nama_instansi = st.session_state.q3_nama if st.session_state.q3_nama else "Anonim"
+                
+                # Memasukkan data Bagian B ke file Excel
+                if st.session_state.q1 == "Usaha": sheet.cell(row=50, column=3).value = "X"
+                else: sheet.cell(row=51, column=3).value = "X"
+                
+                if st.session_state.q2 == "Laboratorium PDAM TKR": sheet.cell(row=54, column=3).value = "X"
+                else: sheet.cell(row=55, column=3).value = "X"
+                if st.session_state.q2_alasan: sheet.cell(row=56, column=5).value = st.session_state.q2_alasan
+                    
+                if st.session_state.q3 == "Ya": 
+                    sheet.cell(row=59, column=3).value = "X"
+                    if st.session_state.q3_nama: sheet.cell(row=62, column=5).value = st.session_state.q3_nama
+                else: sheet.cell(row=60, column=3).value = "X"
+                    
+                if st.session_state.q4 == "Cukup": sheet.cell(row=67, column=3).value = "X"
+                else: 
+                    sheet.cell(row=68, column=3).value = "X"
+                    for param, baris in param_kurang.items():
+                        if st.session_state[f"param_{baris}"]: sheet.cell(row=baris, column=3).value = "X"
+                    if st.session_state.q4_lainnya: 
+                        sheet.cell(row=80, column=3).value = "X"
+                        sheet.cell(row=80, column=5).value = st.session_state.q4_lainnya
 
-            df_eval = pd.read_csv(DATA_F15)
-            df_eval = pd.concat([df_eval, pd.DataFrame([data_evaluasi_baru])], ignore_index=True)
-            df_eval.to_csv(DATA_F15, index=False)
+                if st.session_state.q5_saran: sheet.cell(row=82, column=3).value = st.session_state.q5_saran
 
-            st.success("Kuesioner Anda berhasil dikirim! Terima kasih.")
-        except Exception as e:
-            st.error(f"Gagal memproses. Pastikan file ter-upload. Error: {e}")
+                path_simpan = os.path.join(FOLDER_HASIL, f"F13_{nama_instansi}_{random.randint(1000, 9999)}.xlsx")
+                wb.save(path_simpan)
+
+                df_log = pd.read_csv(LOG_FILE)
+                df_log = pd.concat([df_log, pd.DataFrame([{"Nama / Instansi": nama_instansi, "Tujuan Uji": st.session_state.q1}])], ignore_index=True)
+                df_log.to_csv(LOG_FILE, index=False)
+
+                df_eval = pd.read_csv(DATA_F15)
+                df_eval = pd.concat([df_eval, pd.DataFrame([data_evaluasi_baru])], ignore_index=True)
+                df_eval.to_csv(DATA_F15, index=False)
+
+                st.success("Kuesioner Anda berhasil dikirim! Terima kasih.")
+                st.button("Isi Kuesioner Baru", on_click=reset_kuesioner)
+                
+            except Exception as e:
+                st.error(f"Gagal memproses. Pastikan file ter-upload. Error: {e}")
 
 # ==========================================
 # HALAMAN 2: PANEL ADMIN
@@ -128,24 +208,11 @@ elif menu == "Panel Admin":
         if st.button("🖨️ Generate Evaluasi F15 (.xlsx)", type="primary"):
             if jumlah_responden > 0 and os.path.exists(TEMPLATE_F15):
                 try:
-                    # MENGGUNAKAN METODE Xlwings-like melalui xlsxwriter atau library lain yang safe.
-                    # Namun cara teraman agar grafik tidak hilang (menghindari bug openpyxl):
-                    # Kita tetap pakai openpyxl, TAPI kita set mode keep_vba=True atau tidak merusak zip gambar.
-                    
-                    # Sayangnya bug ini ada di library bawaan. Solusi terbaik agar tidak hilang 
-                    # adalah menggunakan metode read/write data murni (tanpa merusak struktur zip):
-                    
-                    import shutil
-                    from zipfile import ZipFile, ZIP_DEFLATED
-                    import tempfile
-                    
-                    # 1. Hitung seluruh data terlebih dahulu (Kinerja, Harapan, Rata-rata)
                     baris_mulai_k = 12
                     baris_mulai_h = 36
                     baris_mulai_pemetaan = 71
                     
-                    updates = {} # Dictionary posisi baris kolom excel
-                    
+                    updates = {} 
                     for index, row in df_eval.iterrows():
                         if index >= 15: break
                         updates[(baris_mulai_k + index, 2)] = index + 1
@@ -160,11 +227,6 @@ elif menu == "Panel Admin":
                     for idx in range(14):
                         updates[(baris_mulai_pemetaan + idx, 4)] = rata_rata_k[idx]
                         updates[(baris_mulai_pemetaan + idx, 6)] = rata_rata_h[idx]
-
-                    # 2. Proses modifikasi isi file Excel secara rahasia (Safe Save Openpyxl)
-                    # Jika menggunakan openpyxl, ada trik menghindari chart dihapus: jangan sentuh Sheet tersebut jika tidak perlu. 
-                    # Tapi karena kita mengedit, kita biarkan saja openpyxl berjalan biasa tanpa membuat chart baru, 
-                    # Jika masih gagal, kita minta pengguna mengandalkan file xlsx hasil. 
                     
                     wb_f15 = openpyxl.load_workbook(TEMPLATE_F15)
                     ws15 = wb_f15[NAMA_SHEET_F15]
@@ -184,7 +246,7 @@ elif menu == "Panel Admin":
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
                     
-                    st.info("Penting: Jika grafik kartesius di file yang baru di-download ini tiba-tiba hilang/tidak muncul, buka file tersebut lalu salin (copy) tabel datanya saja ke template F15 Anda yang asli di komputer Anda.")
+                    st.info("Penting: Jika grafik kartesius di file yang baru di-download ini tiba-tiba hilang/tidak muncul (karena keterbatasan sistem server awan), Anda cukup membuka file ini lalu meng-copy tabel datanya saja ke template F15 asli di komputer Anda.")
                 except Exception as e:
                     st.error(f"Gagal mencetak F15: {e}")
             elif not os.path.exists(TEMPLATE_F15):
