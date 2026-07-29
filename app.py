@@ -1,174 +1,202 @@
 import streamlit as st
 import openpyxl
-from openpyxl.styles import Border, Side, Alignment
 from io import BytesIO
+import pandas as pd
+import os
+import datetime
+import zipfile
 
 # --- Konfigurasi ---
 TEMPLATE_FILE = "F 13 - Kuesioner Pelanggan.xlsx"
 NAMA_SHEET = "rev 3"
+LOG_FILE = "log_responden.csv"
+FOLDER_HASIL = "hasil_kuesioner"
+
+# Membuat folder dan file log jika belum ada di server
+if not os.path.exists(FOLDER_HASIL):
+    os.makedirs(FOLDER_HASIL)
+if not os.path.exists(LOG_FILE):
+    pd.DataFrame(columns=["Waktu Isi", "Nama / Instansi", "Tujuan Uji"]).to_csv(LOG_FILE, index=False)
 
 st.set_page_config(page_title="Kuesioner Lab TKR", layout="centered")
-st.title("Kuesioner Kepuasan Pelanggan")
-st.subheader("Laboratorium Perumdam Tirta Kerta Raharja")
 
-st.write("Terima kasih atas kesediaan Anda menjawab pertanyaan berikut. Berikan nilai **1 (Tidak Baik/Tidak Penting)** hingga **4 (Sangat Baik/Sangat Penting)**.")
+# --- MENU SAMPING (SIDEBAR) ---
+st.sidebar.image("https://cdn-icons-png.flaticon.com/512/3127/3127995.png", width=100) # Ikon lab
+st.sidebar.title("Navigasi")
+menu = st.sidebar.radio("Pilih Halaman:", ["Form Kuesioner", "Panel Admin"])
 
-tab1, tab2 = st.tabs(["Bagian A: Penilaian Kinerja", "Bagian B: Kebutuhan & Saran"])
+# ==========================================
+# HALAMAN 1: FORM KUESIONER (UNTUK PELANGGAN)
+# ==========================================
+if menu == "Form Kuesioner":
+    st.title("Kuesioner Kepuasan Pelanggan")
+    st.subheader("Laboratorium Perumdam Tirta Kerta Raharja")
 
-with st.form("kuesioner_form"):
-    
-    # === TAB 1: PENILAIAN (14 Aspek) ===
-    with tab1:
-        st.write("### Penilaian Kinerja Laboratorium")
-        st.info("Nilai 1-4 untuk tingkat Harapan (Kepentingan) & Pelayanan (Kenyataan).")
-        
-        aspek_list = [
-            (27, 'x1. Kemudahan mencapai lokasi laboratorium'),
-            (28, 'x2. Kejelasan Papan Nama Gedung'),
-            (29, 'x3. Kenyamanan dan kebersihan ruang'),
-            (30, 'x4. Sarana Tempat Parkir'),
-            (32, 'x5. Keramahan Petugas'),
-            (33, 'x6. Kemudahan Layanan melalui telepon/ fax'),
-            (35, 'x7. Kepercayaan terhadap hasil pengujian'),
-            (36, 'x8. Peralatan pengujian yang lengkap dan modern'),
-            (37, 'x9. Pengakuan akreditasi laboratorium dari KAN'),
-            (38, 'x10. Kemampuan petugas memberi pelayanan informasi'),
-            (40, 'x11. Jumlah parameter uji memenuhi standar Permenkes'),
-            (41, 'x12. Tampilan Laporan Hasil Pengujian (LHP) mudah dipahami'),
-            (42, 'x13. Kemudahan Pelayanan dan Prosedur Pengujian'),
-            (43, 'x14. Ketepatan Waktu Penyelesaian Pengujian')
-        ]
-        
-        jawaban_a = {}
-        for baris, teks in aspek_list:
-            st.write(f"**{teks}**")
-            col1, col2 = st.columns(2)
-            with col1:
-                harap = st.slider("Harapan Anda", 1, 4, 4, key=f"h_{baris}")
-            with col2:
-                layan = st.slider("Pelayanan Dirasakan", 1, 4, 3, key=f"l_{baris}")
-            jawaban_a[baris] = {"harapan": harap, "pelayanan": layan}
-            st.write("---")
+    st.write("Terima kasih atas kesediaan Anda menjawab pertanyaan berikut. Berikan nilai **1 (Tidak Baik/Tidak Penting)** hingga **4 (Sangat Baik/Sangat Penting)**.")
 
-    # === TAB 2: BAGIAN B & SARAN ===
-    with tab2:
-        st.write("### Profil & Kebutuhan Pelanggan")
-        
-        q1 = st.radio("1. Anda melakukan pengujian untuk kepentingan:", ["Usaha", "Non Usaha"])
-        
-        q2 = st.radio("2. Pilihan laboratorium pengujian air Anda:", ["Laboratorium PDAM TKR", "Laboratorium Lain"])
-        q2_alasan = st.text_input("Alasan Anda memilih:")
-        
-        q3 = st.radio("3. Apakah bermaksud melakukan pengujian rutin?", ["Ya", "Tidak"])
-        st.write("*Jika Ya, tuliskan kontak yang dapat dihubungi:*")
-        c1, c2 = st.columns(2)
-        with c1:
-            q3_nama = st.text_input("Nama Instansi / Perusahaan:")
-            q3_hp = st.text_input("No Telepon / HP:")
-        with c2:
-            q3_alamat = st.text_area("Alamat:")
+    tab1, tab2 = st.tabs(["Bagian A: Penilaian Kinerja", "Bagian B: Kebutuhan & Saran"])
+
+    with st.form("kuesioner_form"):
+        with tab1:
+            st.write("### Penilaian Kinerja Laboratorium")
             
-        q4 = st.radio("4. Apakah parameter pengujian kami memenuhi kebutuhan Anda?", ["Cukup", "Kurang"])
-        st.write("*Jika Kurang, parameter apa yang perlu ditambahkan?*")
+            aspek_list = [
+                (27, 'x1. Kemudahan mencapai lokasi laboratorium'),
+                (28, 'x2. Kejelasan Papan Nama Gedung'),
+                (29, 'x3. Kenyamanan dan kebersihan ruang'),
+                (30, 'x4. Sarana Tempat Parkir'),
+                (32, 'x5. Keramahan Petugas'),
+                (33, 'x6. Kemudahan Layanan melalui telepon/ fax'),
+                (35, 'x7. Kepercayaan terhadap hasil pengujian'),
+                (36, 'x8. Peralatan pengujian yang lengkap dan modern'),
+                (37, 'x9. Pengakuan akreditasi laboratorium dari KAN'),
+                (38, 'x10. Kemampuan petugas memberi pelayanan informasi'),
+                (40, 'x11. Jumlah parameter uji memenuhi standar Permenkes'),
+                (41, 'x12. Tampilan Laporan Hasil Pengujian (LHP) mudah dipahami'),
+                (42, 'x13. Kemudahan Pelayanan dan Prosedur Pengujian'),
+                (43, 'x14. Ketepatan Waktu Penyelesaian Pengujian')
+            ]
+            
+            jawaban_a = {}
+            for baris, teks in aspek_list:
+                st.write(f"**{teks}**")
+                col1, col2 = st.columns(2)
+                with col1: harap = st.slider("Harapan Anda", 1, 4, 4, key=f"h_{baris}")
+                with col2: layan = st.slider("Pelayanan Dirasakan", 1, 4, 3, key=f"l_{baris}")
+                jawaban_a[baris] = {"harapan": harap, "pelayanan": layan}
+                st.write("---")
+
+        with tab2:
+            st.write("### Profil & Kebutuhan Pelanggan")
+            q1 = st.radio("1. Anda melakukan pengujian untuk kepentingan:", ["Usaha", "Non Usaha"])
+            q2 = st.radio("2. Pilihan laboratorium pengujian air Anda:", ["Laboratorium PDAM TKR", "Laboratorium Lain"])
+            q2_alasan = st.text_input("Alasan Anda memilih:")
+            
+            q3 = st.radio("3. Apakah bermaksud melakukan pengujian rutin?", ["Ya", "Tidak"])
+            st.write("*Jika Ya, tuliskan kontak yang dapat dihubungi:*")
+            c1, c2 = st.columns(2)
+            with c1:
+                q3_nama = st.text_input("Nama Instansi / Perusahaan:")
+                q3_hp = st.text_input("No Telepon / HP:")
+            with c2:
+                q3_alamat = st.text_area("Alamat:")
+                
+            q4 = st.radio("4. Apakah parameter pengujian kami memenuhi kebutuhan Anda?", ["Cukup", "Kurang"])
+            st.write("*Jika Kurang, parameter apa yang perlu ditambahkan?*")
+            
+            param_kurang = {'Amoniak': 70, 'Aluminium': 71, 'Seng': 72, 'Tembaga': 73, 'Detergent': 74, 'Kadmium': 75, 'Chromium Valensi 6': 76, 'Sianida': 77, 'Flourida': 78, 'Phospat': 79}
+            pilihan_param = []
+            c3, c4 = st.columns(2)
+            for i, (param, baris) in enumerate(param_kurang.items()):
+                if i % 2 == 0:
+                    with c3:
+                        if st.checkbox(param): pilihan_param.append(baris)
+                else:
+                    with c4:
+                        if st.checkbox(param): pilihan_param.append(baris)
+                        
+            q4_lainnya = st.text_input("Parameter Lain-lain:")
+            st.write("---")
+            q5_saran = st.text_area("5. Mohon saran Anda untuk peningkatan kepuasan pelanggan:")
+            
+        submit_button = st.form_submit_button("Kirim Kuesioner")
+
+    # PROSES PENYIMPANAN
+    if submit_button:
+        try:
+            wb = openpyxl.load_workbook(TEMPLATE_FILE)
+            sheet = wb[NAMA_SHEET]
+            
+            for baris, skor in jawaban_a.items():
+                sheet.cell(row=baris, column=9).value = skor["harapan"]
+                sheet.cell(row=baris, column=11).value = skor["pelayanan"]
+                
+            if q1 == "Usaha": sheet.cell(row=50, column=3).value = "X"
+            else: sheet.cell(row=51, column=3).value = "X"
+            
+            if q2 == "Laboratorium PDAM TKR": sheet.cell(row=54, column=3).value = "X"
+            else: sheet.cell(row=55, column=3).value = "X"
+            if q2_alasan: sheet.cell(row=56, column=5).value = q2_alasan
+                
+            if q3 == "Ya": 
+                sheet.cell(row=59, column=3).value = "X"
+                if q3_nama: sheet.cell(row=62, column=5).value = q3_nama
+                if q3_alamat: sheet.cell(row=63, column=5).value = q3_alamat
+                if q3_hp: sheet.cell(row=64, column=5).value = q3_hp
+            else: 
+                sheet.cell(row=60, column=3).value = "X"
+                
+            if q4 == "Cukup": sheet.cell(row=67, column=3).value = "X"
+            else: 
+                sheet.cell(row=68, column=3).value = "X"
+                for brs_param in pilihan_param: sheet.cell(row=brs_param, column=3).value = "X"
+                if q4_lainnya: 
+                    sheet.cell(row=80, column=3).value = "X"
+                    sheet.cell(row=80, column=5).value = q4_lainnya
+
+            if q5_saran: sheet.cell(row=82, column=3).value = q5_saran
+
+            # 1. Simpan file Excel ke folder tersembunyi di server
+            nama_instansi = q3_nama if q3_nama else "Anonim"
+            waktu_sekarang = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            nama_file_unik = f"F13_{nama_instansi}_{datetime.datetime.now().strftime('%H%M%S')}.xlsx"
+            path_simpan = os.path.join(FOLDER_HASIL, nama_file_unik)
+            
+            wb.save(path_simpan)
+
+            # 2. Catat ke dalam file Log CSV
+            df_log = pd.read_csv(LOG_FILE)
+            data_baru = pd.DataFrame([{"Waktu Isi": waktu_sekarang, "Nama / Instansi": nama_instansi, "Tujuan Uji": q1}])
+            df_log = pd.concat([df_log, data_baru], ignore_index=True)
+            df_log.to_csv(LOG_FILE, index=False)
+
+            st.success("Kuesioner Anda berhasil dikirim! Terima kasih atas partisipasinya.")
+            
+        except Exception as e:
+            st.error(f"Terjadi kesalahan sistem: {e}")
+
+# ==========================================
+# HALAMAN 2: PANEL ADMIN (UNTUK ANDA)
+# ==========================================
+elif menu == "Panel Admin":
+    st.title("🛡️ Panel Admin")
+    st.info("Halaman ini khusus untuk pemantauan kuesioner.")
+    
+    # Password Sederhana
+    pwd = st.text_input("Masukkan Password:", type="password")
+    
+    if pwd == "admin123": # <--- ANDA BISA MENGGANTI PASSWORD DI SINI
+        st.success("Login Berhasil!")
         
-        param_kurang = {
-            'Amoniak': 70, 'Aluminium': 71, 'Seng': 72, 'Tembaga': 73,
-            'Detergent': 74, 'Kadmium': 75, 'Chromium Valensi 6': 76,
-            'Sianida': 77, 'Flourida': 78, 'Phospat': 79
-        }
-        
-        pilihan_param = []
-        c3, c4 = st.columns(2)
-        for i, (param, baris) in enumerate(param_kurang.items()):
-            if i % 2 == 0:
-                with c3:
-                    if st.checkbox(param): pilihan_param.append(baris)
-            else:
-                with c4:
-                    if st.checkbox(param): pilihan_param.append(baris)
-                    
-        q4_lainnya = st.text_input("Parameter Lain-lain:")
+        # Tampilkan Tabel Log Responden
+        df_log = pd.read_csv(LOG_FILE)
+        st.write(f"### Total Responden Saat Ini: {len(df_log)} Orang")
+        st.dataframe(df_log, use_container_width=True)
         
         st.write("---")
-        st.write("### Saran Peningkatan")
-        q5_saran = st.text_area("5. Mohon saran Anda untuk peningkatan kepuasan pelanggan:")
+        st.write("### 📥 Download Data")
         
-    submit_button = st.form_submit_button("Simpan & Cetak Kuesioner")
-
-# --- PROSES MEMASUKKAN KE EXCEL ---
-if submit_button:
-    try:
-        wb = openpyxl.load_workbook(TEMPLATE_FILE)
-        sheet = wb[NAMA_SHEET]
-        
-        # Pengaturan gaya (style) untuk kotak "X"
-        garis_tipis = Side(border_style="thin", color="000000")
-        kotak_border = Border(top=garis_tipis, left=garis_tipis, right=garis_tipis, bottom=garis_tipis)
-        posisi_tengah = Alignment(horizontal="center", vertical="center")
-        
-        # Fungsi pembantu untuk membuat kotak X yang rapi
-        def beri_silang_kotak(baris, kolom):
-            sel = sheet.cell(row=baris, column=kolom)
-            sel.value = "X"
-            sel.border = kotak_border
-            sel.alignment = posisi_tengah
-
-        # 1. Mengisi Bagian A
-        for baris, skor in jawaban_a.items():
-            # Untuk bagian A kita hanya mengatur alignment tengah agar rapi, tanpa kotak border
-            sel_harap = sheet.cell(row=baris, column=9)
-            sel_harap.value = skor["harapan"]
-            sel_harap.alignment = posisi_tengah
+        # Fitur download ZIP (Semua file Excel sekaligus)
+        if len(os.listdir(FOLDER_HASIL)) > 0:
+            zip_buffer = BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w") as zip_file:
+                for file_name in os.listdir(FOLDER_HASIL):
+                    file_path = os.path.join(FOLDER_HASIL, file_name)
+                    zip_file.write(file_path, arcname=file_name)
             
-            sel_layan = sheet.cell(row=baris, column=11)
-            sel_layan.value = skor["pelayanan"]
-            sel_layan.alignment = posisi_tengah
+            st.download_button(
+                label="📦 Download Semua File Kuesioner (.ZIP)",
+                data=zip_buffer.getvalue(),
+                file_name=f"Rekap_Kuesioner_{datetime.datetime.now().strftime('%Y%m%d')}.zip",
+                mime="application/zip",
+                help="Download semua file Excel F13 yang sudah diisi pelanggan dalam satu folder ZIP."
+            )
             
-        # 2. Mengisi Bagian B dengan "X" di dalam kotak
-        if q1 == "Usaha": beri_silang_kotak(50, 3)
-        else: beri_silang_kotak(51, 3)
-        
-        if q2 == "Laboratorium PDAM TKR": beri_silang_kotak(54, 3)
-        else: beri_silang_kotak(55, 3)
-        
-        if q2_alasan: sheet.cell(row=56, column=5).value = q2_alasan
+            # Fitur download Log (Tabel CSV)
+            with open(LOG_FILE, "rb") as f:
+                st.download_button("📄 Download Tabel Log (.CSV)", f, file_name="Log_Responden.csv")
+        else:
+            st.warning("Belum ada kuesioner yang diisi. Folder masih kosong.")
             
-        if q3 == "Ya": 
-            beri_silang_kotak(59, 3)
-            if q3_nama: sheet.cell(row=62, column=5).value = q3_nama
-            if q3_alamat: sheet.cell(row=63, column=5).value = q3_alamat
-            if q3_hp: sheet.cell(row=64, column=5).value = q3_hp
-        else: 
-            beri_silang_kotak(60, 3)
-            
-        if q4 == "Cukup": 
-            beri_silang_kotak(67, 3)
-        else: 
-            beri_silang_kotak(68, 3)
-            for brs_param in pilihan_param:
-                beri_silang_kotak(brs_param, 3)
-            if q4_lainnya: 
-                beri_silang_kotak(80, 3)
-                sheet.cell(row=80, column=5).value = q4_lainnya
-
-        # 3. Mengisi Saran
-        if q5_saran:
-            sheet.cell(row=82, column=3).value = q5_saran
-
-        output = BytesIO()
-        wb.save(output)
-        output.seek(0)
-        
-        st.success("Kuesioner berhasil diproses dengan tanda X di dalam kotak yang rapi!")
-        
-        nama_download = q3_nama if q3_nama else "Pelanggan"
-        
-        st.download_button(
-            label="📥 Download File F13 (Terisi Otomatis)",
-            data=output,
-            file_name=f"F13_Terisi_{nama_download}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        
-    except Exception as e:
-        st.error(f"Gagal memproses: {e}")
+    elif pwd != "":
+        st.error("Password Salah!")
