@@ -10,14 +10,13 @@ import random
 
 # --- Konfigurasi ---
 TEMPLATE_F13 = "F 13 - Kuesioner Pelanggan.xlsx"
-TEMPLATE_F15 = "F15_Template.xlsx" # File evaluasi F15 yang baru
+TEMPLATE_F15 = "F15_Template.xlsx" 
 NAMA_SHEET_F13 = "rev 3"
-NAMA_SHEET_F15 = "master rev 2"
+NAMA_SHEET_F15 = "master rev 2 (2)" # <--- NAMA SHEET TERBARU F15 ANDA
 LOG_FILE = "log_kuesioner_baru.csv" 
 FOLDER_HASIL = "hasil_kuesioner"
 LOGO_FILE = "logo tkr.jpg" 
 
-# Folder data log detail untuk mengisi F15
 DATA_F15 = "data_evaluasi.csv"
 
 # Membuat folder dan file log
@@ -26,7 +25,6 @@ if not os.path.exists(FOLDER_HASIL):
 if not os.path.exists(LOG_FILE):
     pd.DataFrame(columns=["Nama / Instansi", "Tujuan Uji"]).to_csv(LOG_FILE, index=False)
 
-# Membuat database untuk nilai F15 jika belum ada
 if not os.path.exists(DATA_F15):
     kolom = ["h_1", "h_2", "h_3", "h_4", "h_5", "h_6", "h_7", "h_8", "h_9", "h_10", "h_11", "h_12", "h_13", "h_14",
              "k_1", "k_2", "k_3", "k_4", "k_5", "k_6", "k_7", "k_8", "k_9", "k_10", "k_11", "k_12", "k_13", "k_14"]
@@ -54,7 +52,7 @@ st.sidebar.title("Navigasi")
 menu = st.sidebar.radio("Pilih Halaman:", ["Form Kuesioner", "Panel Admin"])
 
 # ==========================================
-# HALAMAN 1: FORM KUESIONER (UNTUK PELANGGAN)
+# HALAMAN 1: FORM KUESIONER 
 # ==========================================
 if menu == "Form Kuesioner":
     st.title("Kuesioner Kepuasan Pelanggan")
@@ -90,7 +88,6 @@ if menu == "Form Kuesioner":
 
     if submit_button:
         try:
-            # 1. Simpan F13 individu (seperti biasa)
             wb = openpyxl.load_workbook(TEMPLATE_F13)
             sheet = wb[NAMA_SHEET_F13]
             data_evaluasi_baru = {}
@@ -98,7 +95,6 @@ if menu == "Form Kuesioner":
             for baris, skor in jawaban_a.items():
                 sheet.cell(row=baris, column=9).value = skor["harapan"]
                 sheet.cell(row=baris, column=11).value = skor["pelayanan"]
-                # Mengumpulkan data untuk F15
                 data_evaluasi_baru[f'h_{skor["id"]}'] = skor["harapan"]
                 data_evaluasi_baru[f'k_{skor["id"]}'] = skor["pelayanan"]
                 
@@ -106,12 +102,10 @@ if menu == "Form Kuesioner":
             path_simpan = os.path.join(FOLDER_HASIL, f"F13_{nama_instansi}_{random.randint(1000, 9999)}.xlsx")
             wb.save(path_simpan)
 
-            # 2. Catat log sederhana
             df_log = pd.read_csv(LOG_FILE)
             df_log = pd.concat([df_log, pd.DataFrame([{"Nama / Instansi": nama_instansi, "Tujuan Uji": q1}])], ignore_index=True)
             df_log.to_csv(LOG_FILE, index=False)
 
-            # 3. Simpan rekap skor khusus untuk F15
             df_eval = pd.read_csv(DATA_F15)
             df_eval = pd.concat([df_eval, pd.DataFrame([data_evaluasi_baru])], ignore_index=True)
             df_eval.to_csv(DATA_F15, index=False)
@@ -122,7 +116,7 @@ if menu == "Form Kuesioner":
 
 
 # ==========================================
-# HALAMAN 2: PANEL ADMIN (UNTUK ANDA)
+# HALAMAN 2: PANEL ADMIN
 # ==========================================
 elif menu == "Panel Admin":
     st.title("🛡️ Panel Admin")
@@ -138,47 +132,51 @@ elif menu == "Panel Admin":
         
         st.write(f"### Total Responden Masuk: {jumlah_responden} Orang")
         
-        # Logika Mencetak F15 Otomatis
         if st.button("🖨️ Generate Evaluasi F15 (.xlsx)", type="primary"):
             if jumlah_responden > 0 and os.path.exists(TEMPLATE_F15):
                 try:
                     wb_f15 = openpyxl.load_workbook(TEMPLATE_F15)
                     ws15 = wb_f15[NAMA_SHEET_F15]
                     
-                    baris_mulai_k = 10  # Baris awal Kinerja
-                    baris_mulai_h = 34  # Baris awal Harapan
+                    # --- 1. MENGISI BAGIAN A (KINERJA) & BAGIAN B (HARAPAN) ---
+                    baris_mulai_k = 12  # Sesuai template baru (baris 12)
+                    baris_mulai_h = 36  # Sesuai template baru (baris 36)
                     
-                    # 1. Menulis nilai ke tabel Kinerja (atas) dan Harapan (bawah) F15
                     for index, row in df_eval.iterrows():
-                        if index > 15: # Mencegah error baris di excel jika lebih dari 15
+                        if index >= 15: # Mencegah error jika responden melebih baris kosong di template
                             break 
                             
-                        # Nomor Urut Responden
+                        # Isi No. Responden
                         ws15.cell(row=baris_mulai_k + index, column=2).value = index + 1
                         ws15.cell(row=baris_mulai_h + index, column=2).value = index + 1
                         
-                        for i in range(1, 15): # X1 sampai X14
-                            # Tulis skor Kinerja di baris 10 ke bawah (Kolom 3=X1 dst)
+                        # Isi nilai X1 - X14
+                        for i in range(1, 15):
+                            # Kinerja
                             ws15.cell(row=baris_mulai_k + index, column=2+i).value = row[f'k_{i}']
-                            # Tulis skor Harapan di baris 34 ke bawah
+                            # Harapan
                             ws15.cell(row=baris_mulai_h + index, column=2+i).value = row[f'h_{i}']
                     
-                    # 2. Menghitung & Mengisi Tabel Rata-rata Bawah (Baris 69-82)
+                    # --- 2. MENGISI TABEL PEMETAAN (BARIS 71 - 84) ---
+                    # Menghitung rata-rata dari seluruh responden
                     rata_rata_k = df_eval[[f'k_{i}' for i in range(1, 15)]].mean().tolist()
                     rata_rata_h = df_eval[[f'h_{i}' for i in range(1, 15)]].mean().tolist()
                     
+                    baris_mulai_pemetaan = 71 # Sesuai template baru
                     for idx in range(14):
-                        ws15.cell(row=69 + idx, column=4).value = rata_rata_k[idx] # Rata2 Kinerja (Kolom D)
-                        ws15.cell(row=69 + idx, column=6).value = rata_rata_h[idx] # Rata2 Harapan (Kolom F)
+                        # Kolom 4 (D) = Rata-rata Kinerja
+                        ws15.cell(row=baris_mulai_pemetaan + idx, column=4).value = rata_rata_k[idx]
+                        # Kolom 6 (F) = Rata-rata Harapan
+                        ws15.cell(row=baris_mulai_pemetaan + idx, column=6).value = rata_rata_h[idx]
                     
-                    # Save ke output
+                    # --- 3. MENYIMPAN DAN MENDOWNLOAD ---
                     output_f15 = BytesIO()
                     wb_f15.save(output_f15)
                     output_f15.seek(0)
                     
                     st.success("File Evaluasi F15 berhasil dicetak!")
                     st.download_button(
-                        label="📥 Download Hasil Evaluasi F15 (Terisi)",
+                        label="📥 Download Hasil Evaluasi F15",
                         data=output_f15,
                         file_name=f"F15_Evaluasi_Lab_{jumlah_responden}Responden.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -186,7 +184,7 @@ elif menu == "Panel Admin":
                 except Exception as e:
                     st.error(f"Gagal mencetak F15: {e}")
             elif not os.path.exists(TEMPLATE_F15):
-                st.error(f"File {TEMPLATE_F15} tidak ditemukan di server!")
+                st.error(f"File {TEMPLATE_F15} tidak ditemukan di server! Pastikan namanya persis.")
             else:
                 st.warning("Belum ada data kuesioner yang bisa dievaluasi.")
         
